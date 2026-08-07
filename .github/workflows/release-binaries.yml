@@ -21,7 +21,7 @@ jobs:
             asset_path: dist/br-community-mcp-windows-x64.exe
           - os: macos-26
             artifact_name: br-community-mcp-macos-arm64
-            asset_path: dist/br-community-mcp-macos-arm64.tar.gz
+            asset_path: dist/br-community-mcp-macos-arm64
 
     steps:
       - name: Checkout code
@@ -48,7 +48,7 @@ jobs:
 
       - name: Package macOS binary
         if: runner.os == 'macOS'
-        run: tar -czf "${{ matrix.asset_path }}" -C dist br-community-mcp
+        run: mv dist/br-community-mcp "${{ matrix.asset_path }}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
