@@ -10,7 +10,18 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    name: Build ${{ matrix.artifact_name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact_name: br-community-mcp-windows-x64
+            asset_path: dist/br-community-mcp-windows-x64.exe
+          - os: macos-26
+            artifact_name: br-community-mcp-macos-arm64
+            asset_path: dist/br-community-mcp-macos-arm64.tar.gz
 
     steps:
       - name: Checkout code
@@ -21,8 +32,8 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Set up Python 3.12
-        run: uv python install 3.12
+      - name: Set up Python 3.14
+        run: uv python install 3.14
 
       - name: Install dependencies
         run: uv sync --extra dev
@@ -30,15 +41,24 @@ jobs:
       - name: Build binary
         run: uv run python build.py --clean
 
+      - name: Package Windows binary
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Copy-Item dist/br-community-mcp.exe "${{ matrix.asset_path }}"
+
+      - name: Package macOS binary
+        if: runner.os == 'macOS'
+        run: tar -czf "${{ matrix.asset_path }}" -C dist br-community-mcp
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: br-community-mcp-windows-x64
-          path: dist/br-community-mcp.exe
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.asset_path }}
+          if-no-files-found: error
 
       - name: Upload release asset
         if: github.event_name == 'release'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload "${{ github.event.release.tag_name }}" "dist/br-community-mcp.exe#br-community-mcp-windows-x64.exe" --repo "${{ github.repository }}"
+        run: gh release upload "${{ github.event.release.tag_name }}" "${{ matrix.asset_path }}" --repo "${{ github.repository }}"
