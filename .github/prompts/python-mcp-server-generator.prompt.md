@@ -10,7 +10,7 @@ Create a complete Model Context Protocol (MCP) server in Python with the followi
 ## Requirements
 
 1. **Project Structure**: Create a new Python project with proper structure using uv
-2. **Dependencies**: Include mcp[cli] package with uv
+2. **Dependencies**: Include the MCP Python SDK 2.x (`mcp>=2,<3`) with uv
 3. **Transport Type**: Choose between stdio (for local) or streamable-http (for remote)
 4. **Tools**: Create at least one useful tool with proper type hints
 5. **Error Handling**: Include comprehensive error handling and validation
@@ -20,17 +20,17 @@ Create a complete Model Context Protocol (MCP) server in Python with the followi
 ### Project Setup
 
 - Initialize with `uv init project-name`
-- Add MCP SDK: `uv add "mcp[cli]"`
+- Add MCP SDK: `uv add "mcp>=2,<3"` (and `uv add --optional dev "mcp[cli]>=2,<3"` for `mcp dev`)
 - Create main server file (e.g., `server.py`)
 - Add `.gitignore` for Python projects
 - Configure for direct execution with `if __name__ == "__main__"`
 
 ### Server Configuration
 
-- Use `FastMCP` class from `mcp.server.fastmcp`
-- Set server name and optional instructions
+- Use `MCPServer` class from `mcp.server.mcpserver` (formerly `FastMCP`; `mcp.server.fastmcp` was removed in 2.x)
+- Set server name (positional) and optional instructions (keyword: `instructions=...`)
 - Choose transport: stdio (default) or streamable-http
-- For HTTP: optionally configure host, port, and stateless mode
+- For HTTP: pass host, port, and stateless mode to `mcp.run(...)`, not to the constructor
 
 ### Tool Implementation
 
@@ -74,8 +74,8 @@ Create a complete Model Context Protocol (MCP) server in Python with the followi
   - Test with `uv run mcp dev server.py`
 - **For HTTP Servers**:
   - Port configuration via environment variables
-  - Stateless mode for scalability: `stateless_http=True`
-  - JSON response mode: `json_response=True`
+  - Stateless mode for scalability: `mcp.run(transport="streamable-http", stateless_http=True)`
+  - JSON response mode: `json_response=True` (also a `run()` argument)
   - CORS configuration for browser clients
   - Mounting to existing ASGI servers (Starlette/FastAPI)
 
@@ -85,6 +85,7 @@ Create a complete Model Context Protocol (MCP) server in Python with the followi
   - stdio: `python server.py` or `uv run server.py`
   - HTTP: `python server.py` then connect to `http://localhost:PORT/mcp`
 - Test with MCP Inspector: `uv run mcp dev server.py`
+- Add a protocol-level test with the in-memory client: `async with Client(mcp, mode="legacy") as client:` (`from mcp.client import Client`)
 - Include example tool invocations
 - Add troubleshooting tips
 

@@ -9,8 +9,8 @@ authors = [
 ]
 requires-python = ">=3.14"
 dependencies = [
-    "httpx>=0.28.1",
-    "mcp[cli]>=1.25.0",
+    "httpx>=0.28.1,<1",
+    "mcp>=2,<3",
 ]
 
 [project.optional-dependencies]
@@ -23,6 +23,7 @@ test = [
     "respx>=0.22.0",
 ]
 dev = [
+    "mcp[cli]>=2,<3",
     "bandit>=1.8.0",
     "radon>=6.0.0",
     "pre-commit>=4.0.0",

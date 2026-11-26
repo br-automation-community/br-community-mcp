@@ -19,6 +19,8 @@ jobs:
           - os: windows-latest
             artifact_name: br-community-mcp-windows-x64
             asset_path: dist/br-community-mcp-windows-x64.exe
+            # Legacy name (<= v1.1.1) still consumed by Support Agent's download script
+            legacy_asset_path: dist/br-community-mcp.exe
           - os: macos-26
             artifact_name: br-community-mcp-macos-arm64
             asset_path: dist/br-community-mcp-macos-arm64
@@ -62,3 +64,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release upload "${{ github.event.release.tag_name }}" "${{ matrix.asset_path }}" --repo "${{ github.repository }}"
+
+      - name: Upload legacy-named release asset
+        if: github.event_name == 'release' && matrix.legacy_asset_path
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ github.event.release.tag_name }}" "${{ matrix.legacy_asset_path }}" --repo "${{ github.repository }}"
