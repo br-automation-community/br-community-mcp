@@ -5,16 +5,8 @@ from PyInstaller.utils.hooks import collect_submodules, copy_metadata
 block_cipher = None
 
 hidden_imports = [
-    # MCP SDK internals (v2: FastMCP -> mcp.server.mcpserver, wire types -> mcp_types)
-    "mcp",
-    "mcp.server",
-    "mcp.server.mcpserver",
-    "mcp.server.stdio",
-    "mcp.server.sse",
-    "mcp.server.streamable_http",
-    "mcp.types",
-    "mcp.shared",
-    "mcp.shared.exceptions",
+    # MCP SDK internals (v2: FastMCP -> mcp.server.mcpserver, wire types -> mcp_types).
+    # mcp.cli is excluded: it pulls typer/rich and is only needed for `mcp dev`.
     *collect_submodules("mcp", filter=lambda name: not name.startswith("mcp.cli")),
     *collect_submodules("mcp_types"),
     # OpenTelemetry API (required by mcp 2.x, tracing is on by default)
