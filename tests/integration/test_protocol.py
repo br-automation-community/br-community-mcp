@@ -17,9 +17,14 @@ EXPECTED_TOOLS = {
 }
 
 
+# "legacy" = classic initialize handshake; "2026-07-28" = modern protocol adopted directly
+PROTOCOL_MODES = ["legacy", "2026-07-28"]
+
+
 @pytest.mark.asyncio
-async def test_initialize_list_and_call_tool() -> None:
-    """initialize, tools/list and tools/call work over the in-memory JSON-RPC transport."""
+@pytest.mark.parametrize("mode", PROTOCOL_MODES)
+async def test_initialize_list_and_call_tool(mode: str) -> None:
+    """Handshake, tools/list and tools/call work over the in-memory transport."""
     with respx.mock:
         respx.get(f"{BASE_URL}/search.json").mock(
             return_value=Response(
@@ -39,11 +44,12 @@ async def test_initialize_list_and_call_tool() -> None:
             )
         )
 
-        # mode="legacy" forces the classic initialize handshake over JSON-RPC
-        async with Client(mcp, mode="legacy", raise_exceptions=True) as client:
-            assert client.server_info is not None
-            assert client.server_info.name == "B&R Community"
-            assert client.instructions and "B&R Automation" in client.instructions
+        async with Client(mcp, mode=mode, raise_exceptions=True) as client:
+            # Modern-protocol servers are not required to identify themselves
+            if mode == "legacy":
+                assert client.server_info is not None
+                assert client.server_info.name == "B&R Community"
+                assert client.instructions and "B&R Automation" in client.instructions
 
             tools = await client.list_tools()
             assert {t.name for t in tools.tools} == EXPECTED_TOOLS
@@ -56,3 +62,15 @@ async def test_initialize_list_and_call_tool() -> None:
                 result.structured_content["posts"][0]["topic_title"]
                 == "mappView Widget Question"
             )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", PROTOCOL_MODES)
+async def test_call_tool_upstream_http_error_sets_is_error(mode: str) -> None:
+    """An upstream HTTP failure is reported as a tool error, not a protocol failure."""
+    with respx.mock:
+        respx.get(f"{BASE_URL}/search.json").mock(return_value=Response(500))
+
+        async with Client(mcp, mode=mode) as client:
+            result = await client.call_tool("search_community", {"query": "mappView"})
+            assert result.is_error
