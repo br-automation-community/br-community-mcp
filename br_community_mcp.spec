@@ -1,18 +1,30 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from PyInstaller.utils.hooks import collect_submodules, copy_metadata
+
 block_cipher = None
 
 hidden_imports = [
-    # MCP SDK internals
+    # MCP SDK internals (v2: FastMCP -> mcp.server.mcpserver, wire types -> mcp_types)
     "mcp",
     "mcp.server",
-    "mcp.server.fastmcp",
+    "mcp.server.mcpserver",
     "mcp.server.stdio",
     "mcp.server.sse",
     "mcp.server.streamable_http",
     "mcp.types",
     "mcp.shared",
     "mcp.shared.exceptions",
+    *collect_submodules("mcp", filter=lambda name: not name.startswith("mcp.cli")),
+    *collect_submodules("mcp_types"),
+    # OpenTelemetry API (required by mcp 2.x, tracing is on by default)
+    "opentelemetry",
+    "opentelemetry.context",
+    "opentelemetry.context.contextvars_context",
+    "opentelemetry.propagate",
+    "opentelemetry.propagators",
+    "opentelemetry.trace",
+    "opentelemetry.baggage",
     # ASGI / HTTP stack (used by MCP even in stdio mode)
     "starlette",
     "starlette.applications",
@@ -20,11 +32,15 @@ hidden_imports = [
     "starlette.requests",
     "starlette.responses",
     "starlette.middleware",
+    "sse_starlette",
     "anyio",
     "anyio._backends",
     "anyio._backends._asyncio",
     "httpx",
     "httpcore",
+    "httpx2",
+    "httpcore2",
+    "truststore",
     "sniffio",
     "h11",
     "certifi",
@@ -51,11 +67,17 @@ hidden_imports = [
     "concurrent.futures",
 ]
 
+# Packages that read their own dist metadata at import time (httpx2/httpcore2 call
+# importlib.metadata.version()) or discover plugins via entry points (opentelemetry).
+datas = []
+for dist in ("mcp", "mcp-types", "httpx2", "httpcore2", "opentelemetry-api", "pydantic"):
+    datas += copy_metadata(dist)
+
 a = Analysis(
     ["src/server.py"],
     pathex=["."],
     binaries=[],
-    datas=[],
+    datas=datas,
     hiddenimports=hidden_imports,
     hookspath=[],
     hooksconfig={},

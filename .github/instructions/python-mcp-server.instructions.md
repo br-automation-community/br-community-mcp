@@ -7,31 +7,37 @@ applyTo: "**/*.py, **/pyproject.toml, **/requirements.txt"
 
 ## Instructions
 
-- Use **uv** for project management: `uv init mcp-server-demo` and `uv add "mcp[cli]"`
-- Import FastMCP from `mcp.server.fastmcp`: `from mcp.server.fastmcp import FastMCP`
-- Use `@mcp.tool()`, `@mcp.resource()`, and `@mcp.prompt()` decorators for registration
+- Target the **MCP Python SDK 2.x** (`mcp>=2,<3`). Migration guide: https://py.sdk.modelcontextprotocol.io/v2/migration/
+- Use **uv** for project management: `uv init mcp-server-demo` and `uv add "mcp>=2,<3"` (add the `[cli]` extra only where `mcp dev` / `mcp run` is needed, e.g. a dev extra)
+- Import MCPServer (formerly `FastMCP`) from `mcp.server.mcpserver`: `from mcp.server.mcpserver import MCPServer`. `mcp.server.fastmcp` no longer exists in 2.x
+- Keep the server name positional and pass everything else by keyword: `MCPServer("Name", instructions="...")` (the second positional parameter is now `title`)
+- mcp 2.x no longer installs `httpx` (it uses `httpx2`); if your code imports `httpx`, declare it as your own dependency
+- Use `@mcp.tool()`, `@mcp.resource()`, and `@mcp.prompt()` decorators for registration (they return the original function, so tools can be unit-tested by calling them directly)
 - Type hints are mandatory - they're used for schema generation and validation
 - Use Pydantic models, TypedDicts, or dataclasses for structured output
 - Tools automatically return structured output when return types are compatible
 - For stdio transport, use `mcp.run()` or `mcp.run(transport="stdio")`
 - For HTTP servers, use `mcp.run(transport="streamable-http")` or mount to Starlette/FastAPI
-- Use `Context` parameter in tools/resources to access MCP capabilities: `ctx: Context`
+- Transport parameters (`host`, `port`, `json_response`, `stateless_http`, `streamable_http_path`, ...) go on `run()` / `streamable_http_app()`, not on the `MCPServer` constructor
+- Use `Context` parameter in tools/resources to access MCP capabilities: `ctx: Context` (import it from `mcp.server.mcpserver`)
 - Send logs with `await ctx.debug()`, `await ctx.info()`, `await ctx.warning()`, `await ctx.error()`
 - Report progress with `await ctx.report_progress(progress, total, message)`
 - Request user input with `await ctx.elicit(message, schema)`
-- Use LLM sampling with `await ctx.session.create_message(messages, max_tokens)`
-- Configure icons with `Icon(src="path", mimeType="image/png")` for server, tools, resources, prompts
+- Use LLM sampling with `await ctx.session.create_message(messages, max_tokens)` (deprecated in 2.x by SEP-2577 and refused on 2026-07-28 connections; avoid in new code)
+- Configure icons with `Icon(src="path", mime_type="image/png")` for server, tools, resources, prompts
 - Use `Image` class for automatic image handling: `return Image(data=bytes, format="png")`
 - Define resource templates with URI patterns: `@mcp.resource("greeting://{name}")`
 - Implement completion support by accepting partial values and returning suggestions
 - Use lifespan context managers for startup/shutdown with shared resources
 - Access lifespan context in tools via `ctx.request_context.lifespan_context`
-- For stateless HTTP servers, set `stateless_http=True` in FastMCP initialization
-- Enable JSON responses for modern clients: `json_response=True`
-- Test servers with: `uv run mcp dev server.py` (Inspector)
+- For stateless HTTP servers, pass `stateless_http=True` to `mcp.run(transport="streamable-http", ...)`
+- Enable JSON responses for modern clients: `json_response=True` (also a `run()` argument)
+- Test servers with: `uv run mcp dev server.py` (Inspector, requires the `[cli]` extra)
+- Test at protocol level with the in-memory client: `async with Client(mcp, mode="legacy") as client:` (`from mcp.client import Client`)
+- Protocol type fields are snake_case in Python (`result.is_error`, `result.structured_content`, `tool.input_schema`); use `model_dump(by_alias=True)` for wire format
 - Mount multiple servers in Starlette with different paths: `Mount("/path", mcp.streamable_http_app())`
 - Configure CORS for browser clients: expose `Mcp-Session-Id` header
-- Use low-level Server class for maximum control when FastMCP isn't sufficient
+- Use low-level Server class for maximum control when MCPServer isn't sufficient
 
 ## Best Practices
 
@@ -44,7 +50,7 @@ applyTo: "**/*.py, **/pyproject.toml, **/requirements.txt"
 - Implement proper error handling with try-except blocks
 - Use async functions for I/O-bound operations
 - Clean up resources in lifespan context managers
-- Log to stderr to avoid interfering with stdio transport (when using stdio)
+- Log to stderr to avoid interfering with stdio transport (when using stdio); never `print()` to stdout. OpenTelemetry tracing is on by default in 2.x but is a no-op unless an OTel SDK is configured
 - Use environment variables for configuration
 - Test tools independently before LLM integration
 - Consider security when exposing file system or network access
@@ -56,9 +62,9 @@ applyTo: "**/*.py, **/pyproject.toml, **/requirements.txt"
 ### Basic Server Setup (stdio)
 
 ```python
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
-mcp = FastMCP("My Server")
+mcp = MCPServer("My Server")
 
 @mcp.tool()
 def calculate(a: int, b: int, op: str) -> int:
@@ -74,9 +80,9 @@ if __name__ == "__main__":
 ### HTTP Server
 
 ```python
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
-mcp = FastMCP("My HTTP Server")
+mcp = MCPServer("My HTTP Server")
 
 @mcp.tool()
 def hello(name: str = "World") -> str:
@@ -84,7 +90,7 @@ def hello(name: str = "World") -> str:
     return f"Hello, {name}!"
 
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http")
+    mcp.run(transport="streamable-http", host="127.0.0.1", port=8000)
 ```
 
 ### Tool with Structured Output
@@ -119,13 +125,12 @@ def get_user(user_id: str) -> str:
 ### Tool with Context
 
 ```python
-from mcp.server.fastmcp import Context
-from mcp.server.session import ServerSession
+from mcp.server.mcpserver import Context
 
 @mcp.tool()
 async def process_data(
     data: str,
-    ctx: Context[ServerSession, None]
+    ctx: Context
 ) -> str:
     """Process data with logging"""
     await ctx.info(f"Processing: {data}")
@@ -133,17 +138,18 @@ async def process_data(
     return f"Processed: {data}"
 ```
 
-### Tool with Sampling
+### Tool with Sampling (deprecated in 2.x)
+
+Sampling is deprecated by SEP-2577 and is refused with `NoBackChannelError` on 2026-07-28 connections. Prefer not to depend on it in new tools.
 
 ```python
-from mcp.server.fastmcp import Context
-from mcp.server.session import ServerSession
+from mcp.server.mcpserver import Context
 from mcp.types import SamplingMessage, TextContent
 
 @mcp.tool()
 async def summarize(
     text: str,
-    ctx: Context[ServerSession, None]
+    ctx: Context
 ) -> str:
     """Summarize text using LLM"""
     result = await ctx.session.create_message(
@@ -161,21 +167,21 @@ async def summarize(
 ```python
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from mcp.server.fastmcp import FastMCP, Context
+from mcp.server.mcpserver import MCPServer, Context
 
 @dataclass
 class AppContext:
     db: Database
 
 @asynccontextmanager
-async def app_lifespan(server: FastMCP):
+async def app_lifespan(server: MCPServer):
     db = await Database.connect()
     try:
         yield AppContext(db=db)
     finally:
         await db.disconnect()
 
-mcp = FastMCP("My App", lifespan=app_lifespan)
+mcp = MCPServer("My App", lifespan=app_lifespan)
 
 @mcp.tool()
 def query(sql: str, ctx: Context) -> str:
@@ -187,7 +193,7 @@ def query(sql: str, ctx: Context) -> str:
 ### Prompt with Messages
 
 ```python
-from mcp.server.fastmcp.prompts import base
+from mcp.server.mcpserver.prompts import base
 
 @mcp.prompt(title="Code Review")
 def review_code(code: str) -> list[base.Message]:
@@ -210,4 +216,21 @@ async def risky_operation(input: str) -> str:
         return f"Success: {result}"
     except Exception as e:
         return f"Error: {str(e)}"
+```
+
+### Protocol-level Test (in-memory client)
+
+```python
+from mcp.client import Client
+
+from server import mcp
+
+async def test_tools_list() -> None:
+    # mode="legacy" forces the classic initialize handshake over in-memory JSON-RPC
+    async with Client(mcp, mode="legacy", raise_exceptions=True) as client:
+        assert client.server_info.name == "My Server"
+        tools = await client.list_tools()
+        assert {t.name for t in tools.tools} == {"calculate"}
+        result = await client.call_tool("calculate", {"a": 1, "b": 2, "op": "add"})
+        assert not result.is_error
 ```

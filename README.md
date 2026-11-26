@@ -94,7 +94,7 @@ docker compose run --rm br-community-local
 The MCP Inspector provides a web UI for testing tools and prompts:
 
 ```bash
-# With UV
+# With UV (needs the dev extra, which provides mcp[cli])
 uv run mcp dev src/server.py
 
 # Opens browser at http://localhost:5173

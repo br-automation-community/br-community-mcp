@@ -7,7 +7,7 @@ community forum (https://community.br-automation.com).
 
 from typing import Optional
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from src.models import (
     Category,
@@ -22,7 +22,7 @@ from src.models import (
 from src.utils import BASE_URL, fetch_category_map, make_request, strip_html
 
 # Initialize the MCP server
-mcp = FastMCP(
+mcp = MCPServer(
     "B&R Community",
     instructions="""
     This server provides tools to search and retrieve information from the 
@@ -303,7 +303,7 @@ async def get_top_topics(
 
 def main() -> None:
     """Run the MCP server."""
-    mcp.run()
+    mcp.run(transport="stdio")
 
 
 if __name__ == "__main__":
